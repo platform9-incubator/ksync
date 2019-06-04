@@ -1,0 +1,94 @@
+set -e
+if [[ "$1" == "--rsh" ]] ; then
+    shift
+    ns=$1
+    shift
+    container=$1
+    shift
+    pod=$1
+    shift
+    exec kubectl -n $ns exec -i -c $container $pod -- "$@"
+fi
+
+script=$0
+
+function usage()
+{
+    echo "usage: ksync namespace pod container src dst [--cmd command] -- [rsync options]"
+    echo "       ksync namespace pod container --install"
+    exit 1
+}
+
+ns=$1
+if [[ -z "$ns" ]] ; then
+    usage;
+fi
+
+shift
+pod=$1
+if [[ -z "$pod" ]] ; then
+    usage;
+fi
+
+shift
+container=$1
+if [[ -z "$container" ]] ; then
+    usage;
+fi
+
+shift
+if [[ "$1" == "--install" ]] ; then
+    echo installing rsync...
+    # TODO: detect OS type, and support Ubuntu/Debian in addition to CentOS/RHEL/Fedora
+    if ! kubectl -n $ns exec -c $container $pod -- yum -y install rsync &> /dev/null; then
+        echo failed to install rsync
+        exit 1
+    else
+        echo installed rsync in container
+    fi
+    exit 0
+fi
+
+src=$1
+if [[ -z "$src" ]] ; then
+    usage;
+fi
+
+shift
+dst=$1
+if [[ -z "$dst" ]] ; then
+    usage;
+fi
+
+shift
+
+if [[ "$1" == "--cmd" ]] ; then
+    shift
+    cmd=$1
+    if [[ -z "$cmd" ]] ; then
+        usage;
+    fi
+fi
+
+if [[ "$DEBUG" = "yes" ]] ; then
+    echo script name: "$script"
+    echo ns: "$ns"
+    echo pod: "$pod"
+    echo container: "$container"
+    echo src: "$src"
+    echo dst: "$dst"
+    echo cmd: "$cmd"
+    echo arguments: "$@"
+    echo number of arguments: "$#"
+    echo current dir: `pwd` 
+fi
+
+if ! kubectl -n $ns exec -c $container $pod -- rsync --version &> /dev/null ; then
+    echo "container does not have rsync installed, try --install option"
+    exit 1
+fi
+
+rsync -av -e "$script --rsh $ns $container" $src $pod:$dst
+if [[ -n "$cmd" ]] ; then
+    kubectl -n $ns exec -c $container $pod -- $cmd
+fi
