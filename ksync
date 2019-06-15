@@ -89,7 +89,7 @@ if ! kubectl -n $ns exec -c $container $pod -- rsync --version &> /dev/null ; th
     exit 1
 fi
 
-rsync -av -e "$script --rsh $ns $container" $src $pod:$dst
+rsync -avz -e "$script --rsh $ns $container" $src $pod:$dst
 if [[ -n "$cmd" ]] ; then
     kubectl -n $ns exec -c $container $pod -- $cmd
 fi
